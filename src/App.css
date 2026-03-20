@@ -1,0 +1,255 @@
+/* 全体のリセットと基本設定 */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Helvetica Neue', Arial, sans-serif;
+  background-color: #F7F4EE;
+  color: #2E2C28;
+  min-height: 100vh;
+}
+
+/* アプリ全体のコンテナ（入れ物） */
+.app-container {
+  max-width: 480px;
+  margin: 0 auto;
+  min-height: 100vh;
+  background-color: #F7F4EE;
+}
+
+/* タブレット・PC用（画面幅が480px以上の場合） */
+@media (min-width: 480px) {
+  body {
+    background-color: #e8e4dc;
+  }
+
+  .app-container {
+    margin: 24px auto;
+    min-height: calc(100vh - 48px);
+    border-radius: 16px;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.10);
+    overflow: hidden;
+  }
+}
+
+/* ヘッダー */
+.header {
+  background-color: #4A9068;
+  color: white;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  position: sticky; /* 画面をスクロールしても上に固定される */
+  top: 0;
+  z-index: 10;
+}
+
+.header h1 {
+  font-size: 18px;
+  font-weight: bold;
+}
+
+.back-button {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 4px;
+}
+
+/* メインコンテンツ */
+.main-content {
+  padding: 20px;
+}
+
+/* カード */
+.card {
+  background-color: #FFFFFF;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+/* ボタン */
+.button-primary {
+  background-color: #4A9068;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 24px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  width: 100%;
+}
+
+.button-primary:hover {
+  background-color: #3d7a58;
+}
+
+.button-secondary {
+  background-color: white;
+  color: #4A9068;
+  border: 2px solid #4A9068;
+  border-radius: 8px;
+  padding: 10px 24px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  width: 100%;
+}
+
+.button-secondary:hover {
+  background-color: #f0f8f4;
+}
+
+.button-danger {
+  background-color: white;
+  color: #C03928;
+  border: 2px solid #C03928;
+  border-radius: 8px;
+  padding: 10px 24px;
+  font-size: 14px;
+  cursor: pointer;
+  width: 100%;
+}
+
+/* フォーム（入力欄） */
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-label {
+  display: block;
+  font-size: 14px;
+  font-weight: bold;
+  color: #2E2C28;
+  margin-bottom: 6px;
+}
+
+.form-input {
+  width: 100%;
+  padding: 12px;
+  border: 2px solid #e0ddd8;
+  border-radius: 8px;
+  font-size: 16px;
+  background-color: white;
+  color: #2E2C28;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: #4A9068;
+}
+
+/* タグ */
+.tag {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.tag-pending {
+  background-color: #fff3cd;
+  color: #856404;
+}
+
+.tag-settled {
+  background-color: #d4edda;
+  color: #155724;
+}
+
+/* エラーメッセージ */
+.error-message {
+  color: #C03928;
+  font-size: 14px;
+  margin-top: 6px;
+}
+
+/* チップ（メンバータグ） */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background-color: #e8f5ee;
+  color: #4A9068;
+  border-radius: 20px;
+  padding: 6px 12px;
+  font-size: 14px;
+  margin: 4px;
+}
+
+.chip-delete {
+  background: none;
+  border: none;
+  color: #4A9068;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0;
+  line-height: 1;
+}
+
+/* 区切り線 */
+.divider {
+  border: none;
+  border-top: 1px solid #e0ddd8;
+  margin: 16px 0;
+}
+
+/* テキスト系 */
+.text-small {
+  font-size: 13px;
+  color: #888;
+}
+
+.text-amount {
+  font-size: 24px;
+  font-weight: bold;
+  color: #4A9068;
+}
+
+.text-center {
+  text-align: center;
+}
+
+/* 未精算カード（目立たせる） */
+.card-pending {
+  background-color: #FFFFFF;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border-left: 4px solid #C03928;
+}
+
+/* 精算済みカード */
+.card-settled {
+  background-color: #f9f9f9;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  opacity: 0.7;
+}
+
+/* 未精算バッジ（数字の丸いタグ） */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #C03928;
+  color: white;
+  border-radius: 20px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: bold;
+  margin-left: 6px;
+}
