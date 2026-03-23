@@ -1,48 +1,54 @@
 import { useState } from 'react'
 
-function PaymentAdd({ group, onGoToDetail, onUpdateGroup }) {
-  // 金額を管理する
-  const [amount, setAmount] = useState('')
-  // 支払った人を管理する
-  const [paidBy, setPaidBy] = useState(group.members[0])
-  // メモを管理する
-  const [memo, setMemo] = useState('')
-  // カテゴリを管理する
-  const [category, setCategory] = useState('')
-  // 日付を管理する
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0])
-  // 負担モード（比率／均等）を管理する
-  const [splitMode, setSplitMode] = useState('equal')
-  // 比率を管理する
+function PaymentAdd({ group, editingPayment, onGoToDetail, onUpdateGroup }) {
+  const [amount, setAmount] = useState(editingPayment ? String(editingPayment.amount) : '')
+  const [paidBy, setPaidBy] = useState(editingPayment ? editingPayment.paidBy : group.members[0])
+  const [memo, setMemo] = useState(editingPayment ? editingPayment.memo : '')
+  const [category, setCategory] = useState(editingPayment ? editingPayment.category : '')
+  const [date, setDate] = useState(editingPayment ? editingPayment.date : new Date().toISOString().split('T')[0])
+  // デフォルトを「比率」にして均等割りを廃止する
+  const [splitMode, setSplitMode] = useState(
+    editingPayment ? (editingPayment.splitMode === 'equal' ? 'ratio' : editingPayment.splitMode) : 'ratio'
+  )
+  // デフォルトの比率を5：5にする
   const [ratios, setRatios] = useState(
-    group.members.map((m) => ({ name: m, ratio: 1 }))
+    editingPayment?.ratios || group.members.map((m) => ({ name: m, ratio: 5 }))
   )
-  // 金額直接入力を管理する
   const [amounts, setAmounts] = useState(
-    group.members.map((m) => ({ name: m, amount: '' }))
+    editingPayment?.amounts || group.members.map((m) => ({ name: m, amount: '' }))
   )
-  // エラーメッセージを管理する
   const [error, setError] = useState('')
 
   const categories = ['食事', '交通', '宿泊', '娯楽', 'その他']
 
-  // 比率を更新する
+  // 比率を更新する（片方を変えたらもう片方は10-入力値になる）
   const updateRatio = (name, value) => {
-    setRatios(ratios.map((r) => (r.name === name ? { ...r, ratio: Number(value) } : r)))
+    const intValue = Math.min(9, Math.max(1, Math.round(Number(value))))
+    const updated = ratios.map((r) => {
+      if (r.name === name) return { ...r, ratio: intValue }
+      return { ...r, ratio: 10 - intValue }
+    })
+    setRatios(updated)
   }
 
-  // 金額直接入力を更新する
+  // 金額を更新する（片方を入力したらもう片方は残りになる）
   const updateAmount = (name, value) => {
-    setAmounts(amounts.map((a) => (a.name === name ? { ...a, amount: value } : a)))
+    const inputVal = Number(value) || 0
+    const total = Number(amount) || 0
+    const updated = amounts.map((a) => {
+      if (a.name === name) return { ...a, amount: value }
+      return { ...a, amount: String(Math.max(0, total - inputVal)) }
+    })
+    setAmounts(updated)
+    setError('')
   }
 
-  // 合計金額と入力金額が一致するか確認する
   const totalAmountMatch = () => {
     const sum = amounts.reduce((s, a) => s + (Number(a.amount) || 0), 0)
     return sum === Number(amount)
   }
 
-  // プレビュー（誰がいくら負担するか）を計算する
+  // プレビューを計算する
   const calcPreview = () => {
     if (!amount || isNaN(Number(amount))) return []
     const total = Number(amount)
@@ -53,18 +59,15 @@ function PaymentAdd({ group, onGoToDetail, onUpdateGroup }) {
         name: r.name,
         share: Math.round((total * r.ratio) / ratioSum),
       }))
-    } else if (splitMode === 'amount') {
+    } else {
       return amounts.map((a) => ({
         name: a.name,
         share: Number(a.amount) || 0,
       }))
-    } else {
-      const share = Math.round(total / group.members.length)
-      return group.members.map((m) => ({ name: m, share }))
     }
   }
 
-  // 支払いを追加する
+  // 追加または保存する
   const handleAdd = () => {
     if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
       setError('正しい金額を入力してください')
@@ -75,8 +78,8 @@ function PaymentAdd({ group, onGoToDetail, onUpdateGroup }) {
       return
     }
 
-    const newPayment = {
-      id: Date.now().toString(),
+    const paymentData = {
+      id: editingPayment ? editingPayment.id : Date.now().toString(),
       amount: Number(amount),
       paidBy,
       memo,
@@ -85,20 +88,27 @@ function PaymentAdd({ group, onGoToDetail, onUpdateGroup }) {
       splitMode,
       ratios: splitMode === 'ratio' ? ratios : null,
       amounts: splitMode === 'amount' ? amounts : null,
-      settled: false,
+      settled: editingPayment ? editingPayment.settled : false,
     }
 
-    const updatedPayments = [newPayment, ...(group.payments || [])]
-    const updatedGroup = { ...group, payments: updatedPayments }
-
-    // LocalStorageに保存する
     const saved = localStorage.getItem('groups')
     const groups = saved ? JSON.parse(saved) : []
-    const updatedGroups = groups.map((g) =>
-      g.id === group.id ? updatedGroup : g
-    )
+
+    const updatedGroups = groups.map((g) => {
+      if (g.id !== group.id) return g
+      let updatedPayments
+      if (editingPayment) {
+        updatedPayments = g.payments.map((p) =>
+          p.id === editingPayment.id ? paymentData : p
+        )
+      } else {
+        updatedPayments = [paymentData, ...(g.payments || [])]
+      }
+      return { ...g, payments: updatedPayments }
+    })
+
     localStorage.setItem('groups', JSON.stringify(updatedGroups))
-    onUpdateGroup(updatedGroup)
+    onUpdateGroup({ ...group, payments: updatedGroups.find((g) => g.id === group.id).payments })
     onGoToDetail()
   }
 
@@ -109,7 +119,7 @@ function PaymentAdd({ group, onGoToDetail, onUpdateGroup }) {
       {/* ヘッダー */}
       <div className="header">
         <button className="back-button" onClick={onGoToDetail}>←</button>
-        <h1>支払いを追加</h1>
+        <h1>{editingPayment ? '支払いを編集' : '支払いを追加'}</h1>
       </div>
 
       <div className="main-content">
@@ -123,6 +133,7 @@ function PaymentAdd({ group, onGoToDetail, onUpdateGroup }) {
               placeholder="0"
               value={amount}
               onChange={(e) => { setAmount(e.target.value); setError('') }}
+              style={{ fontSize: '24px', fontWeight: '600', letterSpacing: '-0.02em' }}
             />
           </div>
 
@@ -137,13 +148,14 @@ function PaymentAdd({ group, onGoToDetail, onUpdateGroup }) {
                   style={{
                     flex: 1,
                     padding: '10px',
-                    borderRadius: '8px',
-                    border: '2px solid',
-                    borderColor: paidBy === m ? '#4A9068' : '#e0ddd8',
-                    backgroundColor: paidBy === m ? '#e8f5ee' : 'white',
-                    color: paidBy === m ? '#4A9068' : '#2E2C28',
-                    fontWeight: paidBy === m ? 'bold' : 'normal',
+                    borderRadius: '10px',
+                    border: '1.5px solid',
+                    borderColor: paidBy === m ? '#3D7A58' : '#E0DDD8',
+                    backgroundColor: paidBy === m ? '#EEF7F2' : 'white',
+                    color: paidBy === m ? '#3D7A58' : '#2E2C28',
+                    fontWeight: paidBy === m ? '700' : '400',
                     cursor: 'pointer',
+                    fontSize: '14px',
                   }}
                 >
                   {m}
@@ -152,12 +164,11 @@ function PaymentAdd({ group, onGoToDetail, onUpdateGroup }) {
             </div>
           </div>
 
-          {/* 負担モード */}
+          {/* 負担モード（比率と金額指定の2つのみ） */}
           <div className="form-group">
             <label className="form-label">負担方法</label>
             <div style={{ display: 'flex', gap: '8px' }}>
               {[
-                { key: 'equal', label: '均等割り' },
                 { key: 'ratio', label: '比率' },
                 { key: 'amount', label: '金額指定' },
               ].map((mode) => (
@@ -167,14 +178,14 @@ function PaymentAdd({ group, onGoToDetail, onUpdateGroup }) {
                   style={{
                     flex: 1,
                     padding: '10px',
-                    borderRadius: '8px',
-                    border: '2px solid',
-                    borderColor: splitMode === mode.key ? '#4A9068' : '#e0ddd8',
-                    backgroundColor: splitMode === mode.key ? '#e8f5ee' : 'white',
-                    color: splitMode === mode.key ? '#4A9068' : '#2E2C28',
-                    fontWeight: splitMode === mode.key ? 'bold' : 'normal',
+                    borderRadius: '10px',
+                    border: '1.5px solid',
+                    borderColor: splitMode === mode.key ? '#3D7A58' : '#E0DDD8',
+                    backgroundColor: splitMode === mode.key ? '#EEF7F2' : 'white',
+                    color: splitMode === mode.key ? '#3D7A58' : '#2E2C28',
+                    fontWeight: splitMode === mode.key ? '700' : '400',
                     cursor: 'pointer',
-                    fontSize: '13px',
+                    fontSize: '14px',
                   }}
                 >
                   {mode.label}
@@ -183,22 +194,50 @@ function PaymentAdd({ group, onGoToDetail, onUpdateGroup }) {
             </div>
           </div>
 
-          {/* 比率入力 */}
+          {/* 比率入力（デフォルト5：5） */}
           {splitMode === 'ratio' && (
             <div className="form-group">
-              {ratios.map((r) => (
-                <div key={r.name} style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-                  <span style={{ width: '60px', fontWeight: 'bold' }}>{r.name}</span>
-                  <input
-                    className="form-input"
-                    type="number"
-                    value={r.ratio}
-                    onChange={(e) => updateRatio(r.name, e.target.value)}
-                    style={{ width: '80px' }}
-                  />
-                  <span className="text-small">
+              <label className="form-label">比率（合計10）</label>
+              {ratios.map((r, index) => (
+                <div key={r.name} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                  <span style={{
+                    minWidth: '64px',
+                    maxWidth: '64px',
+                    fontWeight: '700',
+                    fontSize: '13px',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}>
+                    {r.name}
+                  </span>
+                  {index === 0 ? (
+                    <input
+                      className="form-input"
+                      type="number"
+                      min="1"
+                      max="9"
+                      value={r.ratio}
+                      onChange={(e) => updateRatio(r.name, e.target.value)}
+                      style={{ width: '80px', textAlign: 'center' }}
+                    />
+                  ) : (
+                    <div style={{
+                      width: '80px',
+                      padding: '12px 14px',
+                      border: '1.5px solid #EEEBE4',
+                      borderRadius: '10px',
+                      textAlign: 'center',
+                      backgroundColor: '#F7F4EE',
+                      fontWeight: '700',
+                      color: '#3D7A58',
+                    }}>
+                      {r.ratio}
+                    </div>
+                  )}
+                  <span className="text-small" style={{ flex: 1 }}>
                     {amount && !isNaN(Number(amount))
-                      ? `→ ${Math.round((Number(amount) * r.ratio) / ratios.reduce((s, x) => s + x.ratio, 0)).toLocaleString()} ${group.currency}`
+                      ? `→ ${Math.round(Number(amount) * r.ratio / 10).toLocaleString()} ${group.currency}`
                       : ''}
                   </span>
                 </div>
@@ -209,17 +248,43 @@ function PaymentAdd({ group, onGoToDetail, onUpdateGroup }) {
           {/* 金額直接入力 */}
           {splitMode === 'amount' && (
             <div className="form-group">
-              {amounts.map((a) => (
-                <div key={a.name} style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-                  <span style={{ width: '60px', fontWeight: 'bold' }}>{a.name}</span>
-                  <input
-                    className="form-input"
-                    type="number"
-                    placeholder="0"
-                    value={a.amount}
-                    onChange={(e) => { updateAmount(a.name, e.target.value); setError('') }}
-                    style={{ width: '120px' }}
-                  />
+              <label className="form-label">金額を入力</label>
+              {amounts.map((a, index) => (
+                <div key={a.name} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                  <span style={{
+                    minWidth: '64px',
+                    maxWidth: '64px',
+                    fontWeight: '700',
+                    fontSize: '13px',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}>
+                    {a.name}
+                  </span>
+                  {index === 0 ? (
+                    <input
+                      className="form-input"
+                      type="number"
+                      placeholder="0"
+                      value={a.amount}
+                      onChange={(e) => updateAmount(a.name, e.target.value)}
+                      style={{ width: '120px' }}
+                    />
+                  ) : (
+                    <div style={{
+                      width: '120px',
+                      padding: '12px 14px',
+                      border: '1.5px solid #EEEBE4',
+                      borderRadius: '10px',
+                      textAlign: 'center',
+                      backgroundColor: '#F7F4EE',
+                      fontWeight: '700',
+                      color: '#3D7A58',
+                    }}>
+                      {a.amount || 0}
+                    </div>
+                  )}
                   <span className="text-small">{group.currency}</span>
                 </div>
               ))}
@@ -252,12 +317,13 @@ function PaymentAdd({ group, onGoToDetail, onUpdateGroup }) {
                   key={c}
                   onClick={() => setCategory(category === c ? '' : c)}
                   style={{
-                    padding: '8px 14px',
+                    padding: '7px 14px',
                     borderRadius: '20px',
-                    border: '2px solid',
-                    borderColor: category === c ? '#4A9068' : '#e0ddd8',
-                    backgroundColor: category === c ? '#e8f5ee' : 'white',
-                    color: category === c ? '#4A9068' : '#2E2C28',
+                    border: '1.5px solid',
+                    borderColor: category === c ? '#3D7A58' : '#E0DDD8',
+                    backgroundColor: category === c ? '#EEF7F2' : 'white',
+                    color: category === c ? '#3D7A58' : '#9A9690',
+                    fontWeight: category === c ? '700' : '400',
                     cursor: 'pointer',
                     fontSize: '13px',
                   }}
@@ -281,26 +347,33 @@ function PaymentAdd({ group, onGoToDetail, onUpdateGroup }) {
 
           {/* プレビュー */}
           {preview.length > 0 && (
-            <div style={{ backgroundColor: '#f0f8f4', borderRadius: '8px', padding: '12px', marginBottom: '16px' }}>
-              <p style={{ fontWeight: 'bold', marginBottom: '8px', fontSize: '14px' }}>
-                👀 負担プレビュー
+            <div style={{
+              backgroundColor: '#F7F4EE',
+              borderRadius: '10px',
+              padding: '14px',
+              marginBottom: '16px',
+              border: '1px solid #EEEBE4',
+            }}>
+              <p style={{ fontWeight: '700', fontSize: '13px', color: '#6B6860', letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: '10px' }}>
+                負担プレビュー
               </p>
               {preview.map((p) => (
-                <p key={p.name} className="text-small" style={{ marginBottom: '4px' }}>
-                  {p.name}：{p.share.toLocaleString()} {group.currency}
-                </p>
+                <div key={p.name} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                  <span style={{ fontSize: '14px', fontWeight: '500' }}>{p.name}</span>
+                  <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: '600', fontSize: '16px', color: '#3D7A58' }}>
+                    {p.share.toLocaleString()} {group.currency}
+                  </span>
+                </div>
               ))}
             </div>
           )}
 
-          {/* エラーメッセージ */}
           {error && <p className="error-message" style={{ marginBottom: '12px' }}>{error}</p>}
 
           <hr className="divider" />
 
-          {/* 追加ボタン */}
           <button className="button-primary" onClick={handleAdd}>
-            追加する
+            {editingPayment ? '変更を保存する' : '追加する'}
           </button>
         </div>
       </div>

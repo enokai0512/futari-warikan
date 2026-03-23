@@ -1,11 +1,10 @@
 import { useState } from 'react'
 
-function GroupDetail({ group, onGoToList, onGoToPaymentAdd, onUpdateGroup }) {
+function GroupDetail({ group, onGoToList, onGoToPaymentAdd, onGoToPaymentEdit, onUpdateGroup }) {
   const [payments, setPayments] = useState(group.payments || [])
-  // デフォルトを「未精算」に変更する
   const [filter, setFilter] = useState('pending')
 
-  // 精算結果（誰が誰にいくら返すか）を計算する
+  // 精算結果を計算する
   const calcSettlement = () => {
     const totals = {}
     group.members.forEach((m) => (totals[m] = 0))
@@ -14,7 +13,8 @@ function GroupDetail({ group, onGoToList, onGoToPaymentAdd, onUpdateGroup }) {
       const paid = p.paidBy
       const amount = p.amount
 
-      if (p.splitMode === 'ratio') {
+      if (p.splitMode === 'ratio' && p.ratios) {
+        // 比率モードの場合
         const ratioSum = p.ratios.reduce((s, r) => s + r.ratio, 0)
         p.ratios.forEach((r) => {
           const share = (amount * r.ratio) / ratioSum
@@ -24,7 +24,19 @@ function GroupDetail({ group, onGoToList, onGoToPaymentAdd, onUpdateGroup }) {
             totals[r.name] -= share
           }
         })
+      } else if (p.splitMode === 'amount' && p.amounts) {
+        // 金額指定モードの場合
+        p.amounts.forEach((a) => {
+          if (a.name === paid) {
+            // 支払った人は（合計 - 自分の負担額）分を受け取れる
+            totals[paid] += amount - Number(a.amount)
+          } else {
+            // それ以外は自分の負担額を返す必要がある
+            totals[a.name] -= Number(a.amount)
+          }
+        })
       } else {
+        // 均等割りの場合
         const share = amount / group.members.length
         group.members.forEach((m) => {
           if (m === paid) {
@@ -62,7 +74,15 @@ function GroupDetail({ group, onGoToList, onGoToPaymentAdd, onUpdateGroup }) {
     savePayments(updated)
   }
 
-  // LocalStorageに支払いを保存する
+  // 支払いを削除する
+  const handleDelete = (id) => {
+    if (!window.confirm('この支払いを削除しますか？')) return
+    const updated = payments.filter((p) => p.id !== id)
+    setPayments(updated)
+    savePayments(updated)
+  }
+
+  // LocalStorageに保存する
   const savePayments = (newPayments) => {
     const saved = localStorage.getItem('groups')
     const groups = saved ? JSON.parse(saved) : []
@@ -74,16 +94,13 @@ function GroupDetail({ group, onGoToList, onGoToPaymentAdd, onUpdateGroup }) {
     onUpdateGroup({ ...group, payments: newPayments })
   }
 
-  // フィルターに応じた支払い一覧を返す
   const filteredPayments = payments.filter((p) => {
     if (filter === 'settled') return p.settled
     if (filter === 'pending') return !p.settled
     return true
   })
 
-  // 未精算の件数を数える
   const pendingCount = payments.filter((p) => !p.settled).length
-
   const settlement = calcSettlement()
   const allSettled = payments.length > 0 && payments.every((p) => p.settled)
 
@@ -93,7 +110,6 @@ function GroupDetail({ group, onGoToList, onGoToPaymentAdd, onUpdateGroup }) {
       <div className="header">
         <button className="back-button" onClick={onGoToList}>←</button>
         <h1>{group.name}</h1>
-        {/* 未精算バッジ */}
         {pendingCount > 0 && (
           <span className="badge">{pendingCount}件未精算</span>
         )}
@@ -102,35 +118,37 @@ function GroupDetail({ group, onGoToList, onGoToPaymentAdd, onUpdateGroup }) {
       <div className="main-content">
         {/* 精算結果カード */}
         <div className="card">
-          <p style={{ fontWeight: 'bold', marginBottom: '12px' }}>💰 精算結果</p>
+          <p style={{ fontWeight: '700', fontSize: '13px', color: '#6B6860', letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: '12px' }}>
+            精算結果
+          </p>
           {settlement.length === 0 ? (
             <p className="text-small text-center">
               {payments.length === 0
                 ? '支払いを追加すると精算結果が表示されます'
-                : '✅ 精算完了！'}
+                : '精算完了！'}
             </p>
           ) : (
             settlement.map((s, i) => (
-              <div key={i} style={{ marginBottom: '8px' }}>
-                <span style={{ fontWeight: 'bold', color: '#C03928' }}>{s.from}</span>
+              <div key={i} style={{ marginBottom: '10px', padding: '12px', backgroundColor: '#F7F4EE', borderRadius: '10px' }}>
+                <span style={{ fontWeight: '700', color: '#B03020' }}>{s.from}</span>
                 <span className="text-small"> が </span>
-                <span style={{ fontWeight: 'bold', color: '#4A9068' }}>{s.to}</span>
+                <span style={{ fontWeight: '700', color: '#3D7A58' }}>{s.to}</span>
                 <span className="text-small"> に </span>
-                <span style={{ fontWeight: 'bold', fontSize: '20px' }}>
+                <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: '600', fontSize: '20px', letterSpacing: '-0.02em' }}>
                   {s.amount.toLocaleString()} {group.currency}
                 </span>
-                <span className="text-small"> 返す</span>
+                <span className="text-small"> を返す</span>
               </div>
             ))
           )}
         </div>
 
         {/* フィルタータブ */}
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+        <div style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
           {[
-            { key: 'pending', label: '未精算', count: payments.filter((p) => !p.settled).length },
-            { key: 'all', label: '全て', count: null },
-            { key: 'settled', label: '精算済み', count: null },
+            { key: 'pending', label: '未精算', count: pendingCount },
+            { key: 'all', label: 'すべて' },
+            { key: 'settled', label: '精算済み' },
           ].map((tab) => (
             <button
               key={tab.key}
@@ -138,19 +156,17 @@ function GroupDetail({ group, onGoToList, onGoToPaymentAdd, onUpdateGroup }) {
               style={{
                 flex: 1,
                 padding: '8px',
-                borderRadius: '8px',
-                border: '2px solid',
-                borderColor: filter === tab.key ? '#4A9068' : '#e0ddd8',
-                backgroundColor: filter === tab.key ? '#e8f5ee' : 'white',
-                color: filter === tab.key ? '#4A9068' : '#2E2C28',
-                fontWeight: filter === tab.key ? 'bold' : 'normal',
+                borderRadius: '10px',
+                border: '1.5px solid',
+                borderColor: filter === tab.key ? '#3D7A58' : '#E0DDD8',
+                backgroundColor: filter === tab.key ? '#EEF7F2' : 'white',
+                color: filter === tab.key ? '#3D7A58' : '#9A9690',
+                fontWeight: filter === tab.key ? '700' : '400',
                 cursor: 'pointer',
-                fontSize: '14px',
-                position: 'relative',
+                fontSize: '13px',
               }}
             >
               {tab.label}
-              {/* 未精算タブに件数バッジを表示する */}
               {tab.key === 'pending' && tab.count > 0 && (
                 <span className="badge" style={{ marginLeft: '4px', fontSize: '11px' }}>
                   {tab.count}
@@ -162,12 +178,26 @@ function GroupDetail({ group, onGoToList, onGoToPaymentAdd, onUpdateGroup }) {
 
         {/* 支払い一覧 */}
         {filteredPayments.length === 0 ? (
-          <div className="card text-center" style={{ padding: '30px 16px' }}>
-            <p style={{ fontSize: '32px', marginBottom: '8px' }}>
-              {filter === 'pending' ? '🎉' : '📋'}
+          <div className="card text-center" style={{ padding: '36px 16px' }}>
+            <div style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '50%',
+              backgroundColor: '#EEF7F2',
+              margin: '0 auto 12px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                <path d="M5 13l4 4L19 7" stroke="#3D7A58" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+            <p style={{ fontWeight: '700', marginBottom: '4px' }}>
+              {filter === 'pending' ? '未精算はありません' : '支払いがありません'}
             </p>
             <p className="text-small">
-              {filter === 'pending' ? '未精算の支払いはありません！' : '支払いがありません'}
+              {filter === 'pending' ? 'すべて精算済みです' : '支払いを追加してみましょう'}
             </p>
           </div>
         ) : (
@@ -175,37 +205,71 @@ function GroupDetail({ group, onGoToList, onGoToPaymentAdd, onUpdateGroup }) {
             .slice()
             .sort((a, b) => new Date(b.date) - new Date(a.date))
             .map((payment) => (
-              <div
-                key={payment.id}
-                className={payment.settled ? 'card-settled' : 'card-pending'}
-              >
+              <div key={payment.id} className={payment.settled ? 'card-settled' : 'card-pending'}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <div>
-                    <p style={{ fontWeight: 'bold', marginBottom: '4px' }}>
+                    <p style={{ fontWeight: '700', marginBottom: '4px', fontSize: '15px' }}>
                       {payment.memo || '（メモなし）'}
                     </p>
                     <p className="text-small">
-                      {payment.paidBy} が支払い ／ {payment.date}
+                      {payment.paidBy} が支払い · {payment.date}
                     </p>
                     {payment.category && (
-                      <p className="text-small">{payment.category}</p>
+                      <p className="text-small" style={{ marginTop: '2px' }}>{payment.category}</p>
                     )}
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    {/* 金額を大きく表示する */}
                     <p style={{
-                      fontWeight: 'bold',
-                      fontSize: '26px',
-                      color: payment.settled ? '#888' : '#4A9068',
+                      fontFamily: "'DM Sans', sans-serif",
+                      fontWeight: '600',
+                      fontSize: '24px',
+                      color: payment.settled ? '#9A9690' : '#3D7A58',
+                      letterSpacing: '-0.02em',
                       lineHeight: 1.2,
                     }}>
                       {payment.amount.toLocaleString()}
-                      <span style={{ fontSize: '14px' }}> {group.currency}</span>
+                      <span style={{ fontSize: '13px', fontWeight: '400' }}> {group.currency}</span>
                     </p>
                     <span className={payment.settled ? 'tag tag-settled' : 'tag tag-pending'}>
                       {payment.settled ? '精算済み' : '未精算'}
                     </span>
                   </div>
+                </div>
+
+                {/* 編集・削除ボタン */}
+                <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+                  <button
+                    onClick={() => onGoToPaymentEdit(payment)}
+                    style={{
+                      flex: 1,
+                      padding: '7px',
+                      borderRadius: '8px',
+                      border: '1.5px solid #E0DDD8',
+                      backgroundColor: 'white',
+                      color: '#6B6860',
+                      cursor: 'pointer',
+                      fontSize: '13px',
+                      fontWeight: '500',
+                    }}
+                  >
+                    編集
+                  </button>
+                  <button
+                    onClick={() => handleDelete(payment.id)}
+                    style={{
+                      flex: 1,
+                      padding: '7px',
+                      borderRadius: '8px',
+                      border: '1.5px solid #E0DDD8',
+                      backgroundColor: 'white',
+                      color: '#B03020',
+                      cursor: 'pointer',
+                      fontSize: '13px',
+                      fontWeight: '500',
+                    }}
+                  >
+                    削除
+                  </button>
                 </div>
               </div>
             ))
@@ -223,7 +287,7 @@ function GroupDetail({ group, onGoToList, onGoToPaymentAdd, onUpdateGroup }) {
         {/* 支払い追加ボタン */}
         <div style={{ marginTop: '12px' }}>
           <button className="button-primary" onClick={onGoToPaymentAdd}>
-            ＋ 支払いを追加
+            + 支払いを追加
           </button>
         </div>
       </div>

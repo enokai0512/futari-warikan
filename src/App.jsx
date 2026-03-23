@@ -5,30 +5,36 @@ import GroupDetail from './pages/GroupDetail'
 import PaymentAdd from './pages/PaymentAdd'
 
 function App() {
-  // 現在表示する画面を管理する
   const [currentPage, setCurrentPage] = useState('groupList')
-  // 選択中のグループを管理する
   const [selectedGroup, setSelectedGroup] = useState(null)
+  // 編集中の支払いを管理する（nullなら新規追加）
+  const [editingPayment, setEditingPayment] = useState(null)
 
-  // グループ一覧画面に戻る
   const goToGroupList = () => {
     setCurrentPage('groupList')
     setSelectedGroup(null)
+    setEditingPayment(null)
   }
 
-  // グループ作成画面へ移動
   const goToGroupCreate = () => {
     setCurrentPage('groupCreate')
   }
 
-  // グループ詳細画面へ移動
   const goToGroupDetail = (group) => {
     setSelectedGroup(group)
     setCurrentPage('groupDetail')
+    setEditingPayment(null)
   }
 
-  // 支払い追加画面へ移動
+  // 新規支払い追加
   const goToPaymentAdd = () => {
+    setEditingPayment(null)
+    setCurrentPage('paymentAdd')
+  }
+
+  // 編集モードで支払い追加画面へ移動する
+  const goToPaymentEdit = (payment) => {
+    setEditingPayment(payment)
     setCurrentPage('paymentAdd')
   }
 
@@ -50,12 +56,14 @@ function App() {
           group={selectedGroup}
           onGoToList={goToGroupList}
           onGoToPaymentAdd={goToPaymentAdd}
+          onGoToPaymentEdit={goToPaymentEdit}
           onUpdateGroup={setSelectedGroup}
         />
       )}
       {currentPage === 'paymentAdd' && (
         <PaymentAdd
           group={selectedGroup}
+          editingPayment={editingPayment}
           onGoToDetail={() => setCurrentPage('groupDetail')}
           onUpdateGroup={setSelectedGroup}
         />
