@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { getGroups, saveGroups, getMemberSets, saveMemberSets } from '../utils/storage'
 
 function GroupCreate({ onGoToList }) {
   const [groupName, setGroupName] = useState('')
@@ -11,10 +12,10 @@ function GroupCreate({ onGoToList }) {
   const [showSaveSet, setShowSaveSet] = useState(false)
 
   useEffect(() => {
-    const saved = localStorage.getItem('memberSets')
-    if (saved) setSavedSets(JSON.parse(saved))
+    setSavedSets(getMemberSets())
   }, [])
 
+  // メンバーを追加する
   const addMember = () => {
     if (memberInput.trim() === '') return
     if (members.includes(memberInput.trim())) {
@@ -34,6 +35,7 @@ function GroupCreate({ onGoToList }) {
     setMembers(members.filter((m) => m !== name))
   }
 
+  // よく使うメンバーセットを保存する
   const saveSet = () => {
     if (members.length < 2) {
       setError('メンバーを2人以上追加してからセットを保存してください')
@@ -43,10 +45,10 @@ function GroupCreate({ onGoToList }) {
       setError('セット名を入力してください')
       return
     }
-    const newSet = { name: setNameInput.trim(), members: members }
+    const newSet = { name: setNameInput.trim(), members }
     const updated = [newSet, ...savedSets.filter((s) => s.name !== setNameInput.trim())]
     setSavedSets(updated)
-    localStorage.setItem('memberSets', JSON.stringify(updated))
+    saveMemberSets(updated)
     setSetNameInput('')
     setShowSaveSet(false)
     setError('')
@@ -55,7 +57,7 @@ function GroupCreate({ onGoToList }) {
   const deleteSet = (name) => {
     const updated = savedSets.filter((s) => s.name !== name)
     setSavedSets(updated)
-    localStorage.setItem('memberSets', JSON.stringify(updated))
+    saveMemberSets(updated)
   }
 
   const loadSet = (set) => {
@@ -63,6 +65,7 @@ function GroupCreate({ onGoToList }) {
     setError('')
   }
 
+  // グループを作成する
   const handleCreate = () => {
     if (groupName.trim() === '') {
       setError('グループ名を入力してください')
@@ -72,18 +75,18 @@ function GroupCreate({ onGoToList }) {
       setError('メンバーを2人以上追加してください')
       return
     }
+
     const newGroup = {
       id: Date.now().toString(),
       name: groupName.trim(),
-      members: members,
-      currency: currency,
+      members,
+      currency,
       payments: [],
       createdAt: new Date().toISOString(),
     }
-    const saved = localStorage.getItem('groups')
-    const existing = saved ? JSON.parse(saved) : []
-    const updated = [newGroup, ...existing]
-    localStorage.setItem('groups', JSON.stringify(updated))
+
+    const existing = getGroups()
+    saveGroups([newGroup, ...existing])
     onGoToList('グループを作成しました')
   }
 

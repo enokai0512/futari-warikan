@@ -1,66 +1,15 @@
 import { useState } from 'react'
+import { calcSettlement } from '../utils/calc'
+import { updateGroupPayments, getGroups, saveGroups } from '../utils/storage'
 
 function GroupDetail({ group, onGoToList, onGoToPaymentAdd, onGoToPaymentEdit, onUpdateGroup, onShowToast }) {
   const [payments, setPayments] = useState(group.payments || [])
   const [filter, setFilter] = useState('pending')
 
-  // 精算結果を計算する
-  const calcSettlement = () => {
-    const totals = {}
-    group.members.forEach((m) => (totals[m] = 0))
-
-    // 未精算の支払いのみを対象に計算する
-    payments.filter((p) => !p.settled).forEach((p) => {
-      const paid = p.paidBy
-      const amount = p.amount
-
-      if (p.splitMode === 'ratio' && p.ratios) {
-        const ratioSum = p.ratios.reduce((s, r) => s + r.ratio, 0)
-        p.ratios.forEach((r) => {
-          const share = (amount * r.ratio) / ratioSum
-          if (r.name === paid) {
-            totals[paid] += amount - share
-          } else {
-            totals[r.name] -= share
-          }
-        })
-      } else if (p.splitMode === 'amount' && p.amounts) {
-        p.amounts.forEach((a) => {
-          if (a.name === paid) {
-            totals[paid] += amount - Number(a.amount)
-          } else {
-            totals[a.name] -= Number(a.amount)
-          }
-        })
-      } else {
-        const share = amount / group.members.length
-        group.members.forEach((m) => {
-          if (m === paid) {
-            totals[m] += amount - share
-          } else {
-            totals[m] -= share
-          }
-        })
-      }
-    })
-
-    const results = []
-    const debtors = group.members.filter((m) => totals[m] < 0)
-    const creditors = group.members.filter((m) => totals[m] > 0)
-
-    debtors.forEach((debtor) => {
-      let debt = Math.abs(totals[debtor])
-      creditors.forEach((creditor) => {
-        if (debt > 0 && totals[creditor] > 0) {
-          const amount = Math.min(debt, totals[creditor])
-          results.push({ from: debtor, to: creditor, amount: Math.round(amount) })
-          debt -= amount
-          totals[creditor] -= amount
-        }
-      })
-    })
-
-    return results
+  // LocalStorageに支払いを保存する
+  const savePayments = (newPayments) => {
+    updateGroupPayments(group.id, newPayments)
+    onUpdateGroup({ ...group, payments: newPayments })
   }
 
   // 一括精算する
@@ -93,23 +42,9 @@ function GroupDetail({ group, onGoToList, onGoToPaymentAdd, onGoToPaymentEdit, o
   // グループを削除する
   const handleDeleteGroup = () => {
     if (!window.confirm(`「${group.name}」を削除しますか？\nこの操作は元に戻せません。`)) return
-    const saved = localStorage.getItem('groups')
-    const groups = saved ? JSON.parse(saved) : []
-    const updated = groups.filter((g) => g.id !== group.id)
-    localStorage.setItem('groups', JSON.stringify(updated))
+    const groups = getGroups()
+    saveGroups(groups.filter((g) => g.id !== group.id))
     onGoToList()
-  }
-
-  // LocalStorageに保存する
-  const savePayments = (newPayments) => {
-    const saved = localStorage.getItem('groups')
-    const groups = saved ? JSON.parse(saved) : []
-    const updatedGroups = groups.map((g) => {
-      if (g.id === group.id) return { ...g, payments: newPayments }
-      return g
-    })
-    localStorage.setItem('groups', JSON.stringify(updatedGroups))
-    onUpdateGroup({ ...group, payments: newPayments })
   }
 
   const filteredPayments = payments.filter((p) => {
@@ -119,7 +54,7 @@ function GroupDetail({ group, onGoToList, onGoToPaymentAdd, onGoToPaymentEdit, o
   })
 
   const pendingCount = payments.filter((p) => !p.settled).length
-  const settlement = calcSettlement()
+  const settlement = calcSettlement(group.members, payments)
   const allSettled = payments.length > 0 && payments.every((p) => p.settled)
 
   return (
