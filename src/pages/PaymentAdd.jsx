@@ -109,7 +109,7 @@ function PaymentAdd({ group, editingPayment, onGoToDetail, onUpdateGroup }) {
 
     localStorage.setItem('groups', JSON.stringify(updatedGroups))
     onUpdateGroup({ ...group, payments: updatedGroups.find((g) => g.id === group.id).payments })
-    onGoToDetail()
+    onGoToDetail(editingPayment ? '支払いを編集しました' : '支払いを追加しました')
   }
 
   const preview = calcPreview()

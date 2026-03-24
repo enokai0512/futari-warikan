@@ -84,7 +84,7 @@ function GroupCreate({ onGoToList }) {
     const existing = saved ? JSON.parse(saved) : []
     const updated = [newGroup, ...existing]
     localStorage.setItem('groups', JSON.stringify(updated))
-    onGoToList()
+    onGoToList('グループを作成しました')
   }
 
   return (

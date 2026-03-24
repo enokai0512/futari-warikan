@@ -1,23 +1,17 @@
-import { useState, useEffect } from 'react'
-
-function GroupList({ onGoToCreate, onGoToDetail }) {
-  const [groups, setGroups] = useState([])
-
-  useEffect(() => {
-    const saved = localStorage.getItem('groups')
-    if (saved) setGroups(JSON.parse(saved))
-  }, [])
-
+function GroupList({ groups, onGoToCreate, onGoToDetail }) {
+  // 合計金額を計算する
   const calcTotal = (group) => {
     if (!group.payments || group.payments.length === 0) return 0
     return group.payments.reduce((sum, p) => sum + p.amount, 0)
   }
 
+  // 未精算の件数を数える
   const pendingCount = (group) => {
     if (!group.payments) return 0
     return group.payments.filter((p) => !p.settled).length
   }
 
+  // 精算済みかどうか確認する
   const isSettled = (group) => {
     if (!group.payments || group.payments.length === 0) return false
     return group.payments.every((p) => p.settled)

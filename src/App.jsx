@@ -3,14 +3,33 @@ import GroupList from './pages/GroupList'
 import GroupCreate from './pages/GroupCreate'
 import GroupDetail from './pages/GroupDetail'
 import PaymentAdd from './pages/PaymentAdd'
+import Toast from './components/Toast'
 
 function App() {
   const [currentPage, setCurrentPage] = useState('groupList')
   const [selectedGroup, setSelectedGroup] = useState(null)
-  // 編集中の支払いを管理する（nullなら新規追加）
   const [editingPayment, setEditingPayment] = useState(null)
+  const [groups, setGroups] = useState(() => {
+    const saved = localStorage.getItem('groups')
+    return saved ? JSON.parse(saved) : []
+  })
+  // トースト通知のメッセージを管理する
+  const [toastMessage, setToastMessage] = useState('')
+
+  // トースト通知を表示する（2秒後に自動で消える）
+  const showToast = (message) => {
+    setToastMessage(message)
+    setTimeout(() => setToastMessage(''), 2000)
+  }
+
+  const updateGroups = (newGroups) => {
+    setGroups(newGroups)
+    localStorage.setItem('groups', JSON.stringify(newGroups))
+  }
 
   const goToGroupList = () => {
+    const saved = localStorage.getItem('groups')
+    setGroups(saved ? JSON.parse(saved) : [])
     setCurrentPage('groupList')
     setSelectedGroup(null)
     setEditingPayment(null)
@@ -26,29 +45,39 @@ function App() {
     setEditingPayment(null)
   }
 
-  // 新規支払い追加
   const goToPaymentAdd = () => {
     setEditingPayment(null)
     setCurrentPage('paymentAdd')
   }
 
-  // 編集モードで支払い追加画面へ移動する
   const goToPaymentEdit = (payment) => {
     setEditingPayment(payment)
     setCurrentPage('paymentAdd')
+  }
+
+  const handleUpdateGroup = (updatedGroup) => {
+    const newGroups = groups.map((g) =>
+      g.id === updatedGroup.id ? updatedGroup : g
+    )
+    updateGroups(newGroups)
+    setSelectedGroup(updatedGroup)
   }
 
   return (
     <div className="app-container">
       {currentPage === 'groupList' && (
         <GroupList
+          groups={groups}
           onGoToCreate={goToGroupCreate}
           onGoToDetail={goToGroupDetail}
         />
       )}
       {currentPage === 'groupCreate' && (
         <GroupCreate
-          onGoToList={goToGroupList}
+          onGoToList={(msg) => {
+            goToGroupList()
+            if (msg) showToast(msg)
+          }}
         />
       )}
       {currentPage === 'groupDetail' && (
@@ -57,17 +86,24 @@ function App() {
           onGoToList={goToGroupList}
           onGoToPaymentAdd={goToPaymentAdd}
           onGoToPaymentEdit={goToPaymentEdit}
-          onUpdateGroup={setSelectedGroup}
+          onUpdateGroup={handleUpdateGroup}
+          onShowToast={showToast}
         />
       )}
       {currentPage === 'paymentAdd' && (
         <PaymentAdd
           group={selectedGroup}
           editingPayment={editingPayment}
-          onGoToDetail={() => setCurrentPage('groupDetail')}
-          onUpdateGroup={setSelectedGroup}
+          onGoToDetail={(msg) => {
+            setCurrentPage('groupDetail')
+            if (msg) showToast(msg)
+          }}
+          onUpdateGroup={handleUpdateGroup}
         />
       )}
+
+      {/* トースト通知 */}
+      <Toast message={toastMessage} />
     </div>
   )
 }

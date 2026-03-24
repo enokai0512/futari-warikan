@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-function GroupDetail({ group, onGoToList, onGoToPaymentAdd, onGoToPaymentEdit, onUpdateGroup }) {
+function GroupDetail({ group, onGoToList, onGoToPaymentAdd, onGoToPaymentEdit, onUpdateGroup, onShowToast }) {
   const [payments, setPayments] = useState(group.payments || [])
   const [filter, setFilter] = useState('pending')
 
@@ -9,12 +9,12 @@ function GroupDetail({ group, onGoToList, onGoToPaymentAdd, onGoToPaymentEdit, o
     const totals = {}
     group.members.forEach((m) => (totals[m] = 0))
 
-    payments.forEach((p) => {
+    // 未精算の支払いのみを対象に計算する
+    payments.filter((p) => !p.settled).forEach((p) => {
       const paid = p.paidBy
       const amount = p.amount
 
       if (p.splitMode === 'ratio' && p.ratios) {
-        // 比率モードの場合
         const ratioSum = p.ratios.reduce((s, r) => s + r.ratio, 0)
         p.ratios.forEach((r) => {
           const share = (amount * r.ratio) / ratioSum
@@ -25,18 +25,14 @@ function GroupDetail({ group, onGoToList, onGoToPaymentAdd, onGoToPaymentEdit, o
           }
         })
       } else if (p.splitMode === 'amount' && p.amounts) {
-        // 金額指定モードの場合
         p.amounts.forEach((a) => {
           if (a.name === paid) {
-            // 支払った人は（合計 - 自分の負担額）分を受け取れる
             totals[paid] += amount - Number(a.amount)
           } else {
-            // それ以外は自分の負担額を返す必要がある
             totals[a.name] -= Number(a.amount)
           }
         })
       } else {
-        // 均等割りの場合
         const share = amount / group.members.length
         group.members.forEach((m) => {
           if (m === paid) {
@@ -72,14 +68,36 @@ function GroupDetail({ group, onGoToList, onGoToPaymentAdd, onGoToPaymentEdit, o
     const updated = payments.map((p) => ({ ...p, settled: true }))
     setPayments(updated)
     savePayments(updated)
+    onShowToast('一括精算しました')
+  }
+
+  // 個別精算する
+  const handleSettleOne = (id) => {
+    const updated = payments.map((p) =>
+      p.id === id ? { ...p, settled: true } : p
+    )
+    setPayments(updated)
+    savePayments(updated)
+    onShowToast('精算済みにしました')
   }
 
   // 支払いを削除する
-  const handleDelete = (id) => {
+  const handleDeletePayment = (id) => {
     if (!window.confirm('この支払いを削除しますか？')) return
     const updated = payments.filter((p) => p.id !== id)
     setPayments(updated)
     savePayments(updated)
+    onShowToast('支払いを削除しました')
+  }
+
+  // グループを削除する
+  const handleDeleteGroup = () => {
+    if (!window.confirm(`「${group.name}」を削除しますか？\nこの操作は元に戻せません。`)) return
+    const saved = localStorage.getItem('groups')
+    const groups = saved ? JSON.parse(saved) : []
+    const updated = groups.filter((g) => g.id !== group.id)
+    localStorage.setItem('groups', JSON.stringify(updated))
+    onGoToList()
   }
 
   // LocalStorageに保存する
@@ -178,26 +196,44 @@ function GroupDetail({ group, onGoToList, onGoToPaymentAdd, onGoToPaymentEdit, o
 
         {/* 支払い一覧 */}
         {filteredPayments.length === 0 ? (
-          <div className="card text-center" style={{ padding: '36px 16px' }}>
+          <div className="card text-center" style={{ padding: '40px 16px' }}>
             <div style={{
-              width: '40px',
-              height: '40px',
+              width: '48px',
+              height: '48px',
               borderRadius: '50%',
-              backgroundColor: '#EEF7F2',
-              margin: '0 auto 12px',
+              backgroundColor: filter === 'pending' ? '#EEF7F2' : '#F7F4EE',
+              margin: '0 auto 14px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
             }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <path d="M5 13l4 4L19 7" stroke="#3D7A58" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
+              {filter === 'pending' ? (
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                  <path d="M5 13l4 4L19 7" stroke="#3D7A58" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              ) : filter === 'settled' ? (
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                  <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" stroke="#9A9690" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+              ) : (
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                  <path d="M12 4v16m8-8H4" stroke="#9A9690" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+              )}
             </div>
-            <p style={{ fontWeight: '700', marginBottom: '4px' }}>
-              {filter === 'pending' ? '未精算はありません' : '支払いがありません'}
+            <p style={{ fontWeight: '700', marginBottom: '6px', fontSize: '15px' }}>
+              {filter === 'pending'
+                ? 'すべて精算済みです'
+                : filter === 'settled'
+                ? 'まだ精算済みの支払いはありません'
+                : 'まだ支払いがありません'}
             </p>
             <p className="text-small">
-              {filter === 'pending' ? 'すべて精算済みです' : '支払いを追加してみましょう'}
+              {filter === 'pending'
+                ? 'すっきり！引き続きご利用ください'
+                : filter === 'settled'
+                ? '支払いを精算済みにすると表示されます'
+                : '下のボタンから支払いを追加してみましょう'}
             </p>
           </div>
         ) : (
@@ -236,8 +272,26 @@ function GroupDetail({ group, onGoToList, onGoToPaymentAdd, onGoToPaymentEdit, o
                   </div>
                 </div>
 
-                {/* 編集・削除ボタン */}
+                {/* 編集・削除・個別精算ボタン */}
                 <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+                  {!payment.settled && (
+                    <button
+                      onClick={() => handleSettleOne(payment.id)}
+                      style={{
+                        flex: 1,
+                        padding: '7px',
+                        borderRadius: '8px',
+                        border: '1.5px solid #3D7A58',
+                        backgroundColor: '#EEF7F2',
+                        color: '#3D7A58',
+                        cursor: 'pointer',
+                        fontSize: '13px',
+                        fontWeight: '700',
+                      }}
+                    >
+                      精算済みにする
+                    </button>
+                  )}
                   <button
                     onClick={() => onGoToPaymentEdit(payment)}
                     style={{
@@ -255,7 +309,7 @@ function GroupDetail({ group, onGoToList, onGoToPaymentAdd, onGoToPaymentEdit, o
                     編集
                   </button>
                   <button
-                    onClick={() => handleDelete(payment.id)}
+                    onClick={() => handleDeletePayment(payment.id)}
                     style={{
                       flex: 1,
                       padding: '7px',
@@ -288,6 +342,13 @@ function GroupDetail({ group, onGoToList, onGoToPaymentAdd, onGoToPaymentEdit, o
         <div style={{ marginTop: '12px' }}>
           <button className="button-primary" onClick={onGoToPaymentAdd}>
             + 支払いを追加
+          </button>
+        </div>
+
+        {/* グループ削除ボタン */}
+        <div style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid #EEEBE4' }}>
+          <button className="button-danger" onClick={handleDeleteGroup}>
+            このグループを削除する
           </button>
         </div>
       </div>
